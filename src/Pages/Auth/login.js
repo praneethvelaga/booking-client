@@ -53,6 +53,8 @@ function Loginpage() {
   // Handle API authentication
   const doAuthenticate = (email, password) => {
     const formData = { email, password };
+    console.log("HOSTNAME:", HOSTNAME);
+
     setLoading(true);
     setApiError("");
     setAlert(false);

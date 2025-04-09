@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import RoutesConfig from './Pages/Layout/Routes';
 
 function App() {
+  console.log("HOSTNAME:", APIConfig.hostname);
   return (
     <Router>
       <Routes>

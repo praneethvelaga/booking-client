@@ -26,6 +26,8 @@ privateEndPoints.forEach((element, key) => {
 });
 
 function fetcher(method, key, inputEndPoint, inputParams, body) {
+    console.log("HOSTNAME:", HOSTNAME);
+
     let endPoint = inputEndPoint;
     const params = inputParams;
 
