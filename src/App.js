@@ -3,7 +3,8 @@
 import './App.css';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import RoutesConfig from './Pages/Layout/Routes';
-
+import APIConfig from './API/constants'; 
+const HOSTNAME = APIConfig.hostname;
 function App() {
   console.log("HOSTNAME:", APIConfig.hostname);
   return (
