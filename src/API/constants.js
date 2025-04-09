@@ -1,7 +1,7 @@
 export default{
     hostname: process.env.NODE_ENV === 'production'
-  ? 'http://localhost:4000/api'
-  : 'https://booking-server.onrender.com/api',
+  ? 'https://booking-server.onrender.com/api'
+  : 'http://localhost:4000/api',
 
 
 publicEndPoints: new Map([
