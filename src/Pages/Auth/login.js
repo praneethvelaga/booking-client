@@ -12,6 +12,8 @@ import {
   Link,
   Stack,
 } from "@mui/material";
+import APIConfig from '../../API/constants'; 
+const HOSTNAME = APIConfig.hostname;
 
 function Loginpage() {
   const [email, setEmail] = useState("");
