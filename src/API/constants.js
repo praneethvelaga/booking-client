@@ -1,6 +1,6 @@
 export default{
     hostname: process.env.NODE_ENV === 'production'
-  ? 'https://booking-server.onrender.com/api'
+  ? 'https://booking-server-tapy.onrender.com/api'
   : 'http://localhost:4000/api',
 
 
