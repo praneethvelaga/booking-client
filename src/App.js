@@ -6,8 +6,8 @@ import RoutesConfig from './Pages/Layout/Routes';
 import APIConfig from './API/constants'; 
 const HOSTNAME = APIConfig.hostname;
 function App() {
-  console.log("HOSTNAME:", APIConfig.hostname);
-  return (
+  console.log("HOSTNAME login:", APIConfig.hostname);
+  return (  
     <Router>
       <Routes>
         {/* Default Routes */}
