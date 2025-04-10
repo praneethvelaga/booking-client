@@ -60,7 +60,7 @@ function fetcher(method, key, inputEndPoint, inputParams, body) {
         if (params) {
             thisUrl += params; // e.g., "?que=123"
         }
-
+        console.log("Fetching URL:", thisUrl);
         fetch(thisUrl, req)
             .then(async (response) => {
                 let responseJson = {};
