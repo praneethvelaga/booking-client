@@ -16,5 +16,6 @@ privateEndPoints: new Map([
     ["buses",{path : "/buses/", method: "get"}],
     ["EmpValidation",{path : "/Validation/empId", method: "post"}],
     ["BookingSeat",{path:'/bookingSeats/reservation', method:"post"}],
+    ["reservationsSeats",{path:'reservations/book-seats/', method:"get"}],
 ])
 }

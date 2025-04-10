@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import AppAPI from "../../API"; // Assuming this is your API service
+import AppAPI from "../../API";
 import {
   Box,
   Grid,
@@ -30,10 +30,10 @@ const SeatBox = styled(Box)(({ theme, status, selected, isMobile }) => ({
   cursor: status === "booked" ? "not-allowed" : "pointer",
   backgroundColor:
     status === "booked"
-      ? "#f88c92" // Red for booked
+      ? "#f88c92"
       : selected
-      ? "#32db32" // Green for selected
-      : "#fff", // Default
+      ? "#32db32"
+      : "#fff",
   "&:hover": {
     backgroundColor: status !== "booked" && !selected ? "#f0f0f0" : undefined,
   },
@@ -50,7 +50,7 @@ const Layout = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { bus } = location.state || {};
+  const { bus, from, to, date, selectedSeats: incomingSelectedSeats } = location.state || {};
 
   // Handle window resize for mobile detection
   useEffect(() => {
@@ -61,8 +61,10 @@ const Layout = () => {
 
   // Fetch bus data
   useEffect(() => {
+    console.log('Layout received state:', location.state);
     if (!bus) {
-      navigate("/buses-list", { state: { error: "No bus data provided!" } });
+      console.warn('No bus data provided, redirecting to /buses-list');
+      navigate("/buses-list", { state: { error: "No bus data provided!", from, to, date } });
       return;
     }
 
@@ -72,7 +74,7 @@ const Layout = () => {
         const result = await AppAPI.buses.get(`${bus.bus_id}`);
         console.log("API Response:", result);
         if (result.status === 200) {
-          setBookedSeats([]); // Default until booked_seats is available
+          setBookedSeats(result.booked_seats || []);
         } else {
           setError("Failed to fetch bus data.");
         }
@@ -85,7 +87,10 @@ const Layout = () => {
     };
 
     fetchBusData();
-  }, [bus, navigate]);
+    if (incomingSelectedSeats) {
+      setSelectedSeats(incomingSelectedSeats);
+    }
+  }, [bus, navigate, incomingSelectedSeats, from, to, date]);
 
   const generateBusSeatData = () => {
     const totalSeats = bus.number_of_seats || 36;
@@ -193,19 +198,22 @@ const Layout = () => {
   }, [showError]);
 
   const handleConfirmBooking = () => {
-    if (selectedSeats.length > 0) {
-      const userData = JSON.parse(localStorage.getItem('user')) || {}; // Assuming user data is stored in localStorage
-      const bookingDetails = {
-        selectedSeats,
-        userData,
-       // handleBackToLayout: () => navigate(location.pathname, { state: location.state }), // Pass current location back
-        onetiketPrices: Number(bus.ticket_price),
-        totalPrices: selectedSeats.length * Number(bus.ticket_price),
-        busId: bus.bus_id,
-      };
-      console.log("Navigating to PassengerForm with:", bookingDetails);
-      navigate("/passenger-form", { state: bookingDetails });
+    if (selectedSeats.length === 0) {
+      setShowError(true);
+      return;
     }
+
+    const userData = JSON.parse(localStorage.getItem('user')) || {};
+    const bookingDetails = {
+      selectedSeats,
+      userData,
+      onetiketPrices: Number(bus.ticket_price),
+      totalPrices: selectedSeats.length * Number(bus.ticket_price),
+      busId: bus.bus_id,
+      bus, // Ensure bus object is passed
+    };
+    console.log("Navigating to PassengerForm with:", bookingDetails);
+    navigate("/passenger-form", { state: bookingDetails });
   };
 
   if (!bus) {
@@ -215,7 +223,7 @@ const Layout = () => {
         <Button
           variant="contained"
           startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/buses-list",{state: { from: bus.starting_area, to: bus.destination_area, date: bus.date },})}
+          onClick={() => navigate("/buses-list", { state: { from, to, date } })}
           sx={{ mt: 2 }}
         >
           Back to Buses
@@ -240,11 +248,7 @@ const Layout = () => {
         <Button
           variant="contained"
           startIcon={<ArrowBackIcon />}
-          onClick={() =>
-            navigate("/buses-list", {
-              state: { from: bus.starting_area, to: bus.destination_area, date: bus.date },
-            })
-          }
+          onClick={() => navigate("/buses-list", { state: { from, to, date } })}
           sx={{ mt: 2 }}
         >
           Back to Buses
@@ -508,7 +512,7 @@ const Layout = () => {
               <Stack
                 direction="row"
                 justifyContent="space-between"
-                sx={{ borderLeft: "1px dashed #a3a3a3", pl: 1, mt: 1 }}
+                sx={{ borderLeft: "1px dashed #a3a3d4", pl: 1, mt: 1 }}
               >
                 <Typography variant="body2" color="text.secondary">
                   Basic Fare:
@@ -520,7 +524,7 @@ const Layout = () => {
               <Stack
                 direction="row"
                 justifyContent="space-between"
-                sx={{ borderLeft: "1px dashed #a3a3a3", pl: 1, mt: 1 }}
+                sx={{ borderLeft: "1px dashed #a3a3d4", pl: 1, mt: 1 }}
               >
                 <Typography variant="body1" color="text.secondary">
                   Total Price <Typography component="span">(Including all taxes)</Typography>
@@ -544,11 +548,7 @@ const Layout = () => {
                 variant="outlined"
                 fullWidth
                 startIcon={<ArrowBackIcon />}
-                onClick={() =>
-                  navigate("/buses-list", {
-                    state: { from: bus.starting_area, to: bus.destination_area, date: bus.date },
-                  })
-                }
+                onClick={() => navigate("/buses-list", { state: { from, to, date } })}
               >
                 Back to Bus List
               </Button>

@@ -28,55 +28,112 @@ const PassengerForm = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [user, setUser] = useState([]);
+  const [user, setUser] = useState({});
   const [passengers, setPassengers] = useState([]);
   const [validationMessage, setValidationMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [isValidated, setIsValidated] = useState(false);
-  const [isBooked, setIsBooked] = useState(false);
   const [calculatedTotalPrice, setCalculatedTotalPrice] = useState(0);
   const [usedEmployeeIds, setUsedEmployeeIds] = useState(new Set());
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("auth"));
     if (storedUser) {
-      setUser(storedUser.user);
+      setUser(storedUser.user || {});
     }
   }, []);
 
-  const { selectedSeats, userData, onetiketPrices, totalPrices, busId } = location.state || {};
+  const { selectedSeats, userData, onetiketPrices, totalPrices, busId, bus, passengers: incomingPassengers } = location.state || {};
   const originalTicketPrice = Number(onetiketPrices) || 1000;
 
+  // Log initial state to debug
+  useEffect(() => {
+    console.log('PassengerForm initial state:', location.state);
+    console.log('Selected Seats:', selectedSeats, 'Bus ID:', busId, 'Bus:', bus);
+  }, [selectedSeats, busId, bus, location.state]);
+
   const handleBackToLayout = () => {
-    navigate('/seat-layout', {
-      state: { selectedSeats, userData, onetiketPrices, totalPrices, busId },
+    // Log state to debug
+    console.log('Attempting to navigate back to Layout with state:', {
+      selectedSeats,
+      userData,
+      onetiketPrices,
+      totalPrices,
+      busId,
+      bus,
+      from: bus?.starting_area || location.state?.from || '',
+      to: bus?.destination_area || location.state?.to || '',
+      date: location.state?.date || new Date().toISOString().split('T')[0],
     });
+
+    // Check for missing data with fallbacks
+    const safeSelectedSeats = selectedSeats || [];
+    const safeBusId = busId || '';
+    const safeBus = bus || { bus_id: busId, ticket_price: onetiketPrices }; // Fallback bus object
+
+    if (!safeSelectedSeats.length) {
+      console.error('selectedSeats is missing or empty:', selectedSeats);
+      setValidationMessage('Selected seats data is missing.');
+      return;
+    }
+    if (!safeBusId) {
+      console.error('busId is missing:', busId);
+      setValidationMessage('Bus ID is missing.');
+      return;
+    }
+
+    const stateToPass = {
+      selectedSeats: safeSelectedSeats,
+      userData: userData || {},
+      onetiketPrices: onetiketPrices || 1000,
+      totalPrices: totalPrices || (safeSelectedSeats.length * (onetiketPrices || 1000)),
+      busId: safeBusId,
+      bus: safeBus,
+      from: safeBus.starting_area || location.state?.from || '',
+      to: safeBus.destination_area || location.state?.to || '',
+      date: location.state?.date || new Date().toISOString().split('T')[0],
+    };
+    navigate('/view-seats', { state: stateToPass });
   };
 
   useEffect(() => {
-    if (!selectedSeats || !busId) {
+    // Only redirect to /buses-list on initial load if data is completely missing
+    if (!location.state || (!selectedSeats && !busId && !bus)) {
+      console.warn('Redirecting to /buses-list due to missing initial data');
       navigate('/buses-list', { state: { error: 'Missing required data!' } });
       return;
     }
 
-    const initialFormData = selectedSeats.map((seat) => ({
-      seatNo: seat,
-      mobileNo: userData?.phonenumber || '',
-      email: userData?.email || '',
-      name: userData?.name || '',
-      gender: userData?.gender || '',
-      age: 1,
-      concessionType: '',
-      cardNumber: '',
-      employeeRelation: '',
-      isEmployeeVerified: false,
-      ticketPrice: originalTicketPrice,
-      validationMessage: '',
-    }));
-
-    setPassengers(initialFormData);
-    setCalculatedTotalPrice(Number(totalPrices) || Number(selectedSeats.length * originalTicketPrice));
-  }, [selectedSeats, userData, onetiketPrices, totalPrices, busId, navigate, originalTicketPrice]);
+    // If passengers data is passed back from PaymentForm, use it; otherwise, initialize
+    if (incomingPassengers && incomingPassengers.length > 0) {
+      setPassengers(incomingPassengers);
+      setCalculatedTotalPrice(totalPrices || incomingPassengers.reduce((sum, p) => sum + p.ticketPrice, 0));
+      const verifiedEmployeeIds = new Set(
+        incomingPassengers
+          .filter(p => p.concessionType === 'rtc_employee' && p.isEmployeeVerified)
+          .map(p => p.cardNumber)
+      );
+      setUsedEmployeeIds(verifiedEmployeeIds);
+      setIsValidated(true);
+    } else {
+      const initialFormData = (selectedSeats || []).map((seat) => ({
+        seatNo: seat,
+        mobileNo: userData?.phonenumber || user?.phonenumber || '',
+        email: userData?.email || user?.email || '',
+        name: userData?.name || user?.name || '',
+        gender: (userData?.gender || user?.gender || '').toLowerCase(), // Fix case sensitivity
+        age: '',
+        concessionType: '',
+        cardNumber: '',
+        employeeRelation: '',
+        isEmployeeVerified: false,
+        ticketPrice: originalTicketPrice,
+        validationMessage: '',
+      }));
+      setPassengers(initialFormData);
+      setCalculatedTotalPrice(Number(totalPrices) || Number((selectedSeats || []).length * originalTicketPrice));
+    }
+  }, [selectedSeats, userData, onetiketPrices, totalPrices, busId, navigate, originalTicketPrice, incomingPassengers, user, bus, location.state]);
 
   const validateEmployeeId = async (cardNumber, name, relation) => {
     const params = {
@@ -87,7 +144,7 @@ const PassengerForm = () => {
     try {
       setLoading(true);
       console.log('Validating employee ID with params:', params);
-      const response = await AppAPI.EmpValidation.post(null, params); // Kept as requested
+      const response = await AppAPI.EmpValidation.post(null, params);
       console.log('Validation Response:', response);
 
       const result = response && typeof response === 'object'
@@ -140,6 +197,19 @@ const PassengerForm = () => {
 
   const handleChange = (index, e) => {
     const { name, value } = e.target;
+
+    if (name === 'name') {
+      if (!/^[a-zA-Z\s]*$/.test(value)) {
+        return;
+      }
+    }
+
+    if (name === 'age') {
+      if (!/^\d*$/.test(value)) {
+        return;
+      }
+    }
+
     setPassengers((prevData) => {
       const updatedPassengers = [...prevData];
       const prevCardNumber = updatedPassengers[index]?.cardNumber;
@@ -164,7 +234,6 @@ const PassengerForm = () => {
     });
     setValidationMessage('');
     setIsValidated(false);
-    setIsBooked(false);
 
     if (name === 'cardNumber' || name === 'name' || name === 'employeeRelation') {
       const { cardNumber, name: passengerName, employeeRelation } = passengers[index] || {};
@@ -183,7 +252,6 @@ const PassengerForm = () => {
     );
     setValidationMessage('');
     setIsValidated(false);
-    setIsBooked(false);
   };
 
   useEffect(() => {
@@ -194,88 +262,55 @@ const PassengerForm = () => {
     }
   }, [passengers]);
 
-  const bookSeats = async (verifiedPassengers) => {
-    console.log('Starting bookSeats');
-    if (!busId) {
-      setValidationMessage('Missing bus ID.');
-      console.log('busId:', busId);
-      return false;
-    }
-
-    if (verifiedPassengers.length !== selectedSeats.length) {
-      setValidationMessage('Number of passengers must match number of selected seats.');
-      return false;
-    }
-
-    try {
-      setLoading(true);
-      const passengerNames = verifiedPassengers.map(passenger => passenger.name);
-
-      const bookingData = {
-        userId: user.id || 30,
-        busId: busId,
-        seatNumbers: selectedSeats,
-        passengerName: passengerNames,
-        EmployeeID: verifiedPassengers.map(passenger => {
-          const empId = passenger.concessionType === 'rtc_employee' && passenger.isEmployeeVerified 
-            ? passenger.cardNumber 
-            : "";
-          console.log(`Passenger ${passenger.name} - isEmployeeVerified: ${passenger.isEmployeeVerified}, empId: ${empId}`);
-          return empId;
-        }),
-      };
-      console.log('Passengers array before booking:', verifiedPassengers);
-      console.log('Booking Data being sent to backend:', bookingData);
-
-      const response = await AppAPI.BookingSeat.post(null, bookingData); // Kept as requested
-      console.log('Booking Response:', response);
-      setIsBooked(true);
-      return true;
-    } catch (error) {
-      console.error('Error booking seats:', error);
-      const errorMessage = error.message || 'Failed to book seats.';
-      
-      if (errorMessage.includes('Invalid request')) {
-        setValidationMessage('Invalid request. Please ensure all required fields are filled correctly.');
-      } else if (errorMessage.includes('Booking limit')) {
-        setValidationMessage('Booking limit for today exceeded.');
-      } else if (errorMessage.includes('already booked')) {
-        setValidationMessage(errorMessage);
-      } else if (errorMessage.includes('Failed to book seats')) {
-        setValidationMessage(`Failed to book seats: ${error.error || 'Unknown error'}`);
-      } else {
-        setValidationMessage(errorMessage);
-      }
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleVerify = async () => {
     let isValid = true;
     let message = '';
     const tempUsedEmployeeIds = new Set();
-    let updatedPassengers = [...passengers]; // Clone passengers array
+    let updatedPassengers = [...passengers];
 
     for (let i = 0; i < passengers.length; i++) {
       const passenger = passengers[i];
+
+      if (!passenger.gender) {
+        isValid = false;
+        message = `Please select a gender for passenger ${i + 1}.`;
+        break;
+      }
+      if (!passenger.name.trim()) {
+        isValid = false;
+        message = `Please enter a name for passenger ${i + 1}.`;
+        break;
+      }
+      if (!/^[a-zA-Z\s]+$/.test(passenger.name.trim())) {
+        isValid = false;
+        message = `Name for passenger ${i + 1} must contain only alphabetic characters.`;
+        break;
+      }
+      if (!passenger.age || Number(passenger.age) <= 5 || Number(passenger.age) >= 110) {
+        isValid = false;
+        message = `Please enter a valid age (greater than 5 and less than 110) for passenger ${i + 1}.`;
+        break;
+      }
+      if (!passenger.seatNo) {
+        isValid = false;
+        message = `Seat number is missing for passenger ${i + 1}.`;
+        break;
+      }
       if (!passenger.concessionType) {
         isValid = false;
-        message = 'Please select a concession type for all passengers.';
+        message = `Please select a concession type for passenger ${i + 1}.`;
         break;
       }
 
       if (passenger.concessionType === 'rtc_employee') {
         if (!passenger.cardNumber) {
           isValid = false;
-          message = 'Please provide an Employee ID for RTC Employee concession.';
+          message = `Please provide an Employee ID for passenger ${i + 1} (RTC Employee concession).`;
           break;
         }
-
         if (!passenger.employeeRelation) {
           isValid = false;
-          message = 'Please select a relation (Self or Wife) for RTC Employee concession.';
+          message = `Please select a relation (Self or Wife) for passenger ${i + 1} (RTC Employee concession).`;
           break;
         }
 
@@ -294,7 +329,7 @@ const PassengerForm = () => {
           tempUsedEmployeeIds.add(passenger.cardNumber);
         } else if (!result.valid || isAlreadyUsed) {
           isValid = false;
-          message = result.valid ? 'Employee ID already used for this relation' : (result.message || 'Employee ID not verified.');
+          message = result.valid ? `Employee ID already used for this relation for passenger ${i + 1}` : (result.message || `Employee ID not verified for passenger ${i + 1}.`);
           break;
         }
       }
@@ -304,15 +339,7 @@ const PassengerForm = () => {
       setPassengers(updatedPassengers);
       setUsedEmployeeIds(tempUsedEmployeeIds);
       setIsValidated(true);
-      setValidationMessage('All details verified. Booking seats...');
-
-      console.log('Updated passengers after verification:', updatedPassengers);
-      const bookingSuccess = await bookSeats(updatedPassengers); // Pass updatedPassengers directly
-      if (bookingSuccess) {
-        setValidationMessage('Seats booked successfully. Proceed to payment.');
-      } else {
-        setIsValidated(false);
-      }
+      setValidationMessage('All details verified successfully.');
     } else {
       setPassengers(updatedPassengers);
       setIsValidated(false);
@@ -321,8 +348,8 @@ const PassengerForm = () => {
   };
 
   const handleProceedToPayment = () => {
-    if (!isValidated || !isBooked) {
-      setValidationMessage('Please verify and book seats before proceeding.');
+    if (!isValidated) {
+      setValidationMessage('Please verify passenger details before proceeding.');
       return;
     }
 
@@ -352,9 +379,9 @@ const PassengerForm = () => {
                 validationMessage.includes('not verified') ||
                 validationMessage.includes('already used') ||
                 validationMessage.includes('Invalid') ||
-                validationMessage.includes('Failed') ||
-                validationMessage.includes('limit') ||
-                validationMessage.includes('already booked')
+                validationMessage.includes('missing') ||
+                validationMessage.includes('must contain only') ||
+                validationMessage.includes('Cannot navigate')
                   ? 'error'
                   : 'success'
               }
@@ -410,7 +437,7 @@ const PassengerForm = () => {
                           <InputLabel>Gender</InputLabel>
                           <Select
                             name="gender"
-                            value={passenger.gender}
+                            value={passenger.gender || ''} // Default to empty string if undefined
                             onChange={(e) => handleChange(index, e)}
                           >
                             <MenuItem value="">Select One</MenuItem>
@@ -428,17 +455,18 @@ const PassengerForm = () => {
                           onChange={(e) => handleChange(index, e)}
                           fullWidth
                           required
+                          inputProps={{ pattern: "[a-zA-Z\\s]*" }}
                         />
                       </TableCell>
                       <TableCell>
                         <TextField
-                          type="number"
+                          type="text"
                           name="age"
                           value={passenger.age}
                           onChange={(e) => handleChange(index, e)}
-                          inputProps={{ min: 1 }}
                           fullWidth
                           required
+                          inputProps={{ pattern: "\\d*" }}
                         />
                       </TableCell>
                       <TableCell>
@@ -535,7 +563,7 @@ const PassengerForm = () => {
                   variant="contained"
                   color="primary"
                   onClick={handleProceedToPayment}
-                  disabled={loading || !isValidated || !isBooked}
+                  disabled={loading || !isValidated}
                 >
                   Proceed to Payment
                 </Button>

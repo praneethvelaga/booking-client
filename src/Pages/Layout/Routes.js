@@ -7,6 +7,7 @@ import HomeComponent from "../Home/home";
 import Layout from "../BusesList/BuesLayout";
 import BusesList from "../BusesList/BusesList";
 import PassengerFormWrapper from "../Booking/BookingForm";
+import PaymentForm from "../Payment/Payment";
 
 
 const DefaultRoutes = [
@@ -39,12 +40,12 @@ const PrivateRoutes = [
         element: <Layout />
     },
     {
-        path:"/seat-layout",
-        element:<Layout />
-    },
-    {
         path: "/passenger-form",
         element: <PassengerFormWrapper />
+    },
+    {
+        path: '/payment',
+        element: <PaymentForm />
     }
 ];
 
