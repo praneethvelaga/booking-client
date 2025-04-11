@@ -30,7 +30,7 @@ const SeatBox = styled(Box)(({ theme, status, selected, isMobile }) => ({
   cursor: status === "booked" ? "not-allowed" : "pointer",
   backgroundColor:
     status === "booked"
-      ? "#f88c92"
+      ? "#f88c92" // Red color for booked seats
       : selected
       ? "#32db32"
       : "#fff",
@@ -47,6 +47,7 @@ const Layout = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 600);
+  const [seatData, setSeatData] = useState({});
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -59,28 +60,42 @@ const Layout = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Fetch bus data
+  // Fetch bus data and booked seats
   useEffect(() => {
-    console.log('Layout received state:', location.state);
+    console.log("Layout received state:", location.state);
     if (!bus) {
-      console.warn('No bus data provided, redirecting to /buses-list');
+      console.warn("No bus data provided, redirecting to /buses-list");
       navigate("/buses-list", { state: { error: "No bus data provided!", from, to, date } });
       return;
     }
 
     const fetchBusData = async () => {
       try {
+        setLoading(true);
         console.log("Bus ID:", bus.bus_id);
-        const result = await AppAPI.buses.get(`${bus.bus_id}`);
-        console.log("API Response:", result);
-        if (result.status === 200) {
-          setBookedSeats(result.booked_seats || []);
+
+        // Fetch bus details
+        const busResult = await AppAPI.buses.get(`${bus.bus_id}`);
+        console.log("Bus API Response:", busResult);
+        if (busResult.status === 200) {
+          // Fetch booked seats with bus ID in the URL
+          const reservationsResult = await AppAPI.reservationsSeats.get(`${bus.bus_id}`);
+          console.log("Reservations API Response:", reservationsResult);
+          let bookedSeatsData = [];
+          if (reservationsResult.status === 200) {
+            bookedSeatsData = reservationsResult || [];
+            console.log("thokka : ", bookedSeatsData);
+            setBookedSeats(bookedSeatsData.map(Number)); // Convert string numbers to integers
+          }
+          if (bookedSeatsData.length === 0 && busResult.booked_seats) {
+            setBookedSeats(busResult.booked_seats.map(Number));
+          }
         } else {
           setError("Failed to fetch bus data.");
         }
       } catch (err) {
-        console.error("Error fetching bus data:", err);
-        setError("Something went wrong while fetching bus data.");
+        console.error("Error fetching data:", err);
+        setError("Something went wrong while fetching data.");
       } finally {
         setLoading(false);
       }
@@ -92,84 +107,105 @@ const Layout = () => {
     }
   }, [bus, navigate, incomingSelectedSeats, from, to, date]);
 
-  const generateBusSeatData = () => {
-    const totalSeats = bus.number_of_seats || 36;
-    const seatsMinusThird = totalSeats - 1;
-    const seatsPerRowBase = Math.floor(seatsMinusThird / 4);
-    const extraSeats = seatsMinusThird % 4;
+  // Generate bus seat data when bus or bookedSeats changes
+  useEffect(() => {
+    if (bus) {
+      const generateBusSeatData = () => {
+        console.log("Generating seat data with bookedSeats:", bookedSeats);
+        const totalSeats = bus.number_of_seats || 36;
+        let n = Math.floor((totalSeats - 1) / 5); // Base approximation
+        if (n < 8) n = 8; // Minimum n for 30-50 range
+        if (n > 12) n = 12; // Maximum n for 30-50 range
 
-    const row1Length = seatsPerRowBase + (extraSeats > 0 ? 1 : 0);
-    const row2Length = seatsPerRowBase + (extraSeats > 1 ? 1 : 0);
-    const row4BaseLength = seatsPerRowBase + (extraSeats > 2 ? 1 : 0);
-    const row4Length = Math.min(row4BaseLength - 1, seatsPerRowBase - 1);
-    const row5Length = totalSeats - (row1Length + row2Length + 1 + row4Length);
+        // Adjust to fit total seats
+        const baseTotal = 2 * n + 1 + (n - 1) + n; // Row 1, 2, 3, 4, 5
+        const remainingSeats = totalSeats - baseTotal;
+        if (remainingSeats > 0) {
+          n += Math.ceil(remainingSeats / 4); // Distribute remaining seats
+          if (n > 12) n = 12; // Cap at 12
+        }
 
-    let seatCounter = 1;
-    let oddDisplay = 1;
-    let evenDisplay = 2;
+        let seatCounter = 1;
+        let oddDisplay = 1; // Start with odd for Row 1
+        let evenDisplay = 2; // Start with even for Row 2
 
-    const row1 = Array.from({ length: row1Length }, () => {
-      const seat = {
-        id: seatCounter++,
-        displayNumber: oddDisplay,
-        status: bookedSeats.includes(oddDisplay) ? "booked" : "available",
-        price: Number(bus.ticket_price),
-      };
-      oddDisplay += 2;
-      return seat;
-    });
+        // Row 1: n seats (odd numbers)
+        const row1 = Array.from({ length: n }, () => {
+          const seat = {
+            id: seatCounter++,
+            displayNumber: oddDisplay,
+            status: bookedSeats.includes(oddDisplay) ? "booked" : "available",
+            price: Number(bus.ticket_price),
+          };
+          oddDisplay += 2;
+          return seat;
+        });
 
-    const row2 = Array.from({ length: row2Length }, () => {
-      const seat = {
-        id: seatCounter++,
-        displayNumber: evenDisplay,
-        status: bookedSeats.includes(evenDisplay) ? "booked" : "available",
-        price: Number(bus.ticket_price),
-      };
-      evenDisplay += 2;
-      return seat;
-    });
+        // Row 2: n seats (even numbers)
+        const row2 = Array.from({ length: n }, () => {
+          const seat = {
+            id: seatCounter++,
+            displayNumber: evenDisplay,
+            status: bookedSeats.includes(evenDisplay) ? "booked" : "available",
+            price: Number(bus.ticket_price),
+          };
+          evenDisplay += 2;
+          return seat;
+        });
 
-    const row3 =
-      seatCounter <= totalSeats
-        ? [
-            {
+        // Row 3: 1 seat (odd number)
+        const row3 = seatCounter <= totalSeats
+          ? [
+              {
+                id: seatCounter++,
+                displayNumber: oddDisplay,
+                status: bookedSeats.includes(oddDisplay) ? "booked" : "available",
+                price: Number(bus.ticket_price),
+              },
+            ]
+          : [];
+        oddDisplay += 2;
+
+        // Row 4: n-1 seats (odd numbers)
+        const row4Length = n - 1 + (remainingSeats > 0 && remainingSeats <= 1 ? 1 : 0);
+        const row4 = Array.from({ length: row4Length }, () => {
+          if (seatCounter <= totalSeats) {
+            const seat = {
               id: seatCounter++,
               displayNumber: oddDisplay,
               status: bookedSeats.includes(oddDisplay) ? "booked" : "available",
               price: Number(bus.ticket_price),
-            },
-          ]
-        : [];
-    oddDisplay += 2;
-    evenDisplay = row3[0]?.displayNumber + 1 || evenDisplay;
+            };
+            oddDisplay += 2;
+            return seat;
+          }
+          return null;
+        }).filter(seat => seat !== null);
 
-    const row4 = Array.from({ length: row4Length }, () => {
-      const seat = {
-        id: seatCounter++,
-        displayNumber: oddDisplay,
-        status: bookedSeats.includes(oddDisplay) ? "booked" : "available",
-        price: Number(bus.ticket_price),
+        // Row 5: n seats (even numbers)
+        const usedSeats = row1.length + row2.length + row3.length + row4.length;
+        const row5Length = totalSeats - usedSeats;
+        const row5 = Array.from({ length: row5Length }, () => {
+          if (seatCounter <= totalSeats) {
+            const seat = {
+              id: seatCounter++,
+              displayNumber: evenDisplay,
+              status: bookedSeats.includes(evenDisplay) ? "booked" : "available",
+              price: Number(bus.ticket_price),
+            };
+            evenDisplay += 2;
+            return seat;
+          }
+          return null;
+        }).filter(seat => seat !== null);
+
+        return { row1, row2, row3, row4, row5 };
       };
-      oddDisplay += 2;
-      return seat;
-    });
+      setSeatData(generateBusSeatData());
+    }
+  }, [bus, bookedSeats]);
 
-    const row5 = Array.from({ length: row5Length }, () => {
-      const seat = {
-        id: seatCounter++,
-        displayNumber: evenDisplay,
-        status: bookedSeats.includes(evenDisplay) ? "booked" : "available",
-        price: Number(bus.ticket_price),
-      };
-      evenDisplay += 2;
-      return seat;
-    });
-
-    return { row1, row2, row3, row4, row5 };
-  };
-
-  const { row1, row2, row3, row4, row5 } = bus ? generateBusSeatData() : {};
+  const { row1, row2, row3, row4, row5 } = seatData;
 
   const handleSeatClick = (seatId) => {
     const allSeats = [...row1, ...row2, ...row3, ...row4, ...row5];
@@ -203,14 +239,14 @@ const Layout = () => {
       return;
     }
 
-    const userData = JSON.parse(localStorage.getItem('user')) || {};
+    const userData = JSON.parse(localStorage.getItem("user")) || {};
     const bookingDetails = {
       selectedSeats,
       userData,
       onetiketPrices: Number(bus.ticket_price),
       totalPrices: selectedSeats.length * Number(bus.ticket_price),
       busId: bus.bus_id,
-      bus, // Ensure bus object is passed
+      bus,
     };
     console.log("Navigating to PassengerForm with:", bookingDetails);
     navigate("/passenger-form", { state: bookingDetails });
@@ -324,45 +360,47 @@ const Layout = () => {
                   }}
                 >
                   {[row1, row2, row3, row4, row5].map((row, idx) => (
-                    <Box
-                      key={idx}
-                      sx={{
-                        display: "flex",
-                        gap: 1,
-                        justifyContent: idx === 2 ? "flex-end" : "flex-end",
-                      }}
-                    >
-                      {row.map((seat) => (
-                        <SeatBox
-                          key={seat.id}
-                          status={seat.status}
-                          selected={selectedSeats.includes(seat.displayNumber)}
-                          onClick={() => handleSeatClick(seat.id)}
-                          isMobile={isMobile}
-                        >
-                          <Typography
-                            sx={{
-                              transform: isMobile ? "rotate(0deg)" : "rotate(90deg)",
-                              fontSize: "14px",
-                            }}
+                    row.length > 0 && (
+                      <Box
+                        key={idx}
+                        sx={{
+                          display: "flex",
+                          gap: 1,
+                          justifyContent: idx === 2 ? "flex-end" : "flex-end",
+                        }}
+                      >
+                        {row.map((seat) => (
+                          <SeatBox
+                            key={seat.id}
+                            status={seat.status}
+                            selected={selectedSeats.includes(seat.displayNumber)}
+                            onClick={() => handleSeatClick(seat.id)}
+                            isMobile={isMobile}
                           >
-                            {seat.displayNumber}
-                          </Typography>
-                          <MdOutlineChair
-                            style={{
-                              fontSize: "1.5rem",
-                              transform: isMobile ? "rotate(0deg)" : "rotate(90deg)",
-                              color:
-                                seat.status === "booked"
-                                  ? "white"
-                                  : selectedSeats.includes(seat.displayNumber)
-                                  ? "#32db32"
-                                  : "#6b7280",
-                            }}
-                          />
-                        </SeatBox>
-                      ))}
-                    </Box>
+                            <Typography
+                              sx={{
+                                transform: isMobile ? "rotate(0deg)" : "rotate(90deg)",
+                                fontSize: "14px",
+                              }}
+                            >
+                              {seat.displayNumber}
+                            </Typography>
+                            <MdOutlineChair
+                              style={{
+                                fontSize: "1.5rem",
+                                transform: isMobile ? "rotate(0deg)" : "rotate(90deg)",
+                                color:
+                                  seat.status === "booked"
+                                    ? "white"
+                                    : selectedSeats.includes(seat.displayNumber)
+                                    ? "#32db32"
+                                    : "#6b7280",
+                              }}
+                            />
+                          </SeatBox>
+                        ))}
+                      </Box>
+                    )
                   ))}
                 </Box>
               </Box>
@@ -431,7 +469,7 @@ const Layout = () => {
               maxWidth: isMobile ? "90vw" : "400px",
               display: "flex",
               flexDirection: "column",
-              gap: 2,
+              gap: 2
             }}
           >
             <Typography variant="h6" color="text.secondary">

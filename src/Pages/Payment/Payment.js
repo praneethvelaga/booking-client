@@ -288,7 +288,7 @@ const PaymentForm = () => {
                 <Button
                   variant="contained"
                   color="primary"
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/homepage')}
                 >
                   GO TO HOME
                 </Button>
