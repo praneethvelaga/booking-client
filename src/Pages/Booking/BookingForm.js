@@ -352,10 +352,10 @@ const PassengerForm = () => {
       setValidationMessage('Please verify passenger details before proceeding.');
       return;
     }
-
-    console.log('Navigating to payment with:', passengers);
+  
+    console.log('Navigating to payment with:', { passengers, totalPrice: calculatedTotalPrice, busId, selectedSeats, bus });
     navigate('/payment', {
-      state: { passengers, totalPrice: calculatedTotalPrice, busId, selectedSeats },
+      state: { passengers, totalPrice: calculatedTotalPrice, busId, selectedSeats, bus },
     });
   };
 

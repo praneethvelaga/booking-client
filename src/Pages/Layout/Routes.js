@@ -8,6 +8,7 @@ import Layout from "../BusesList/BuesLayout";
 import BusesList from "../BusesList/BusesList";
 import PassengerFormWrapper from "../Booking/BookingForm";
 import PaymentForm from "../Payment/Payment";
+import ForgotPassword from "../Auth/ForgotPassword";
 
 
 const DefaultRoutes = [
@@ -22,6 +23,10 @@ const DefaultRoutes = [
     {
         path: "/register",
         element: <RegistrationPage />
+    },
+    {
+        path : "/forgotPassword",
+        element: <ForgotPassword />
     }
 ];
 

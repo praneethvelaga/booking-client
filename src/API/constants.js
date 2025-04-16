@@ -7,6 +7,9 @@ export default{
 publicEndPoints: new Map([
     ["auth", {path:"/auth/autontication", method: ['post']}],
     ["register", {path:"/regist/RegisterNewUser", method: ['post']}],
+    ["emailVerification", {path:"/otp/send-otp", method: ['post']}],
+    ["otpVerification", {path:"/otp/verify-otp", method: ['post']}],
+    ["passwordReset", {path:"/otp/reset-password", method: ['patch']}],
 ]),
 
 privateEndPoints: new Map([

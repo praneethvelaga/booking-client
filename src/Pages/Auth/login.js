@@ -31,6 +31,9 @@ function Loginpage() {
   const handleRegisterClick = () => {
     navigate("/register");
   };
+  const handleForgotPasswordClick = () => {
+    navigate("/forgotPassword");
+  };
 
   // Validate email and password
   const validateForm = () => {
@@ -73,8 +76,6 @@ function Loginpage() {
           );
         } else if (result.token) {
           saveUserState({ token: result.token, user: result.user });
-          //console.log("hi")
-          // Navigate to the homepage after successful login
           navigate("/homepage");
         } else {
           setAlert(true);
@@ -198,6 +199,7 @@ function Loginpage() {
             component="button"
             variant="body2"
             disabled={loading}
+            onClick={handleForgotPasswordClick}
             sx={{ textDecoration: "none" }}
           >
             Forgot Password?
